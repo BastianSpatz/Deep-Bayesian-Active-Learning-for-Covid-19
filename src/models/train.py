@@ -1,47 +1,43 @@
-import os
 import random
+import os, sys
 import argparse
-
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from torchmetrics import Accuracy
 from torch.utils.data import DataLoader
-from pytorch_lightning import Trainer
 from pytorch_lightning.core.module import LightningModule
+from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import ModelCheckpoint
 
 from pytorch_lightning.loggers import CometLogger
 
-from src.configs.comet_configs import comet_config
-from src.dataset.utils import train_test_validation_split
+from conv_net import ConvNN
 from src.dataset.dataset import Dataset, collate_fn_padd
-from src.models.conv_net import ConvNN
+from src.dataset.utils import train_test_validation_split
+from dataclasses import dataclass
 
-from random_config import ExperimentConfig
+from  src.configs.comet_configs import comet_config
+
+@dataclass
+class TrainConfig:
+    epoch: int = 10
+    batch_size: int = 8
+    lr: float = 1e-4
 
 
-class RandomLearningTrainLoop(LightningModule):
+class ConvModule(LightningModule):
 
-    def __init__(self, model, args, cfg) -> None: 
-        super(RandomLearningTrainLoop, self).__init__()
+    def __init__(self, model, args):
+        super(ConvModule, self).__init__()
         self.model = model
         self.criterion = nn.CrossEntropyLoss()
         self.args = args
         self.accuracy = Accuracy(task='multiclass')
         self.save_hyperparameters()
-        self.dataset = Dataset(path_to_npy_data=args.path_to_npy_data,
+        dataset = Dataset(path_to_npy_data=args.path_to_npy_data,
                              path_to_npy_targets=args.path_to_npy_targets)
-        self.cfg = cfg
-        self.get_datasets()
-
-
-    def get_datasets(self):
-        train, self.test, self.valid = train_test_validation_split(dataset=self.dataset)
-        # In a real application, you will want a validation set here.
-
-        # choose initial pool
-        self.curr_train_dataset, self.all_train_ds = torch.utils.data.random_split(train, [self.cfg.initial_pool, len(train)-self.cfg.initial_pool])
+        self.train_ds, self.test_ds, self.valid_ds = train_test_validation_split(dataset)
 
     def training_step(self, batch, batch_idx):
         # loss = self.step(batch)
@@ -54,13 +50,6 @@ class RandomLearningTrainLoop(LightningModule):
         self.log("train_loss",  loss.detach(), on_epoch=True, batch_size=self.args.batch_size)
 
         return loss
-
-    def training_epoch_end(self, training_step_outputs):
-        # loss = self.step(batch)
-        random_set, self.all_train_ds = torch.utils.data.random_split(self.all_train_ds, [self.cfg.query_size, len(self.all_train_ds)-self.cfg.query_size]) 
-        self.curr_train_dataset = torch.utils.data.ConcatDataset([self.curr_train_dataset, random_set])
-        self.log("dataset_len", len(self.curr_train_dataset))
-
 
     def validation_step(self, batch, batch_idx):
         # loss = self.step(batch)
@@ -84,14 +73,14 @@ class RandomLearningTrainLoop(LightningModule):
                     }
 
     def train_dataloader(self):
-        return DataLoader(dataset=self.curr_train_dataset,
+        return DataLoader(dataset=self.train_ds,
                             num_workers=self.args.num_workers,
                             batch_size=self.args.batch_size,
                             pin_memory=True,
                             collate_fn=collate_fn_padd)
 
     def val_dataloader(self):
-        return DataLoader(dataset=self.valid,
+        return DataLoader(dataset=self.valid_ds,
                             num_workers=self.args.num_workers,
                             batch_size=self.args.batch_size,
                             pin_memory=True,
@@ -104,16 +93,16 @@ def train(args):
 
     model = ConvNN()
     if args.load_from_checkpoint:
-        conv_module = RandomLearningTrainLoop.load_from_checkpoint(args.ckp_path, model=model, args=args, cfg=ExperimentConfig)
+        conv_module = ConvModule.load_from_checkpoint(args.ckp_path, model=model, args=args)
     else:
-        conv_module = RandomLearningTrainLoop(model, args, cfg=ExperimentConfig)
+        conv_module = ConvModule(model, args)
     # speech_module = SpeechModule(num_cnn_layers=1, num_rnn_layers=2, rnn_dim=512, num_classes=29, n_feats=128)
 
     logger = CometLogger(
         api_key=comet_config["api_key"],
         project_name=comet_config["project_name"],
         workspace=comet_config["workspace"],
-        experiment_name="fullyConvModel_random_{}_{}".format(args.epochs, args.learning_rate))
+        experiment_name="fullyConvModel_{}_{}".format(args.epochs, args.learning_rate))
 
     ckpt_callback = ModelCheckpoint(save_top_k=-1)
     trainer = Trainer(
@@ -123,8 +112,7 @@ def train(args):
 		logger=logger,
 		# val_check_interval=args.valid_every,
 		callbacks=ckpt_callback,
-		resume_from_checkpoint=args.ckp_path,
-        reload_dataloaders_every_n_epochs =1
+		resume_from_checkpoint=args.ckp_path
 		)
 
     trainer.fit(conv_module)
@@ -153,9 +141,9 @@ if __name__ == "__main__":
                         help='check path to resume from')
 
     # general
-    parser.add_argument('--epochs', default=20, type=int, help='number of total epochs to run')
+    parser.add_argument('--epochs', default=10, type=int, help='number of total epochs to run')
     parser.add_argument('--batch_size', default=2, type=int, help='size of batch')
-    parser.add_argument('--learning_rate', default=9e-4, type=float, help='learning rate')
+    parser.add_argument('--learning_rate', default=0.05, type=float, help='learning rate')
     parser.add_argument('--pct_start', default=0.3, type=float, help='percentage of growth phase in one cycle')
     parser.add_argument('--div_factor', default=100, type=int, help='div factor for one cycle')
     parser.add_argument("--hparams_override", default={},

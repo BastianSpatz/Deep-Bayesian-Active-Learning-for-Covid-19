@@ -40,7 +40,7 @@ class Dataset(torch.utils.data.Dataset):
             volume = torch.tensor(volume).permute(0, 3, 1, 2).float()
             
             if self.is_transform is True:
-                volume = self.transform()(volume)
+                volume = transforms.Resize((512//4, 512//4))(volume)
 
             # volume size: (3, n_images, *, *)    
             volume = volume.transpose(0, 1)
@@ -57,8 +57,7 @@ class Dataset(torch.utils.data.Dataset):
         random_angle = random.choice(angles)
         RotationTransform = MyRotationTransform(random_angle)
         transform = transforms.Compose(
-            [transforms.Resize((256, 256)),
-            RotationTransform,])
+            [transforms.Resize((512//4, 512//4))])
         return transform
 
 

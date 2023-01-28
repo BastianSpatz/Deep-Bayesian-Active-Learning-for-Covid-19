@@ -154,8 +154,12 @@ cython_debug/
 
 # folders
 data/
-models/
+/models/
 configs/
+/active-learning/
+lightning_logs
+labels.txt
+checkpoint.pth
 
 # PyCharm
 #  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
