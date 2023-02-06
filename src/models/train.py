@@ -1,23 +1,25 @@
-import random
-import os, sys
 import argparse
+import os
+import random
+import sys
+from dataclasses import dataclass
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torchmetrics import Accuracy
-from torch.utils.data import DataLoader
-from pytorch_lightning.core.module import LightningModule
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import ModelCheckpoint
-
+from pytorch_lightning.core.module import LightningModule
 from pytorch_lightning.loggers import CometLogger
+from pytorch_lightning.callbacks.early_stopping import EarlyStopping
+from torch.utils.data import DataLoader
+from torchmetrics import Accuracy
 
-from conv_net import ConvNN
-from src.dataset.dataset import Dataset, collate_fn_padd
+from src.configs.comet_configs import comet_config
+from src.dataset.dataset import CustomDataset, collate_fn_padd
 from src.dataset.utils import train_test_validation_split
-from dataclasses import dataclass
+from src.models.conv_net import ConvNN, MnistExampleModel
 
-from  src.configs.comet_configs import comet_config
 
 @dataclass
 class TrainConfig:
@@ -33,11 +35,12 @@ class ConvModule(LightningModule):
         self.model = model
         self.criterion = nn.CrossEntropyLoss()
         self.args = args
+        self.lr = self.args.learning_rate
         self.accuracy = Accuracy(task='multiclass')
         self.save_hyperparameters()
-        dataset = Dataset(path_to_npy_data=args.path_to_npy_data,
+        self.dataset = CustomDataset(path_to_npy_data=args.path_to_npy_data,
                              path_to_npy_targets=args.path_to_npy_targets)
-        self.train_ds, self.test_ds, self.valid_ds = train_test_validation_split(dataset)
+        self.train_indices, self.test_indices, _= self.dataset.get_active_learning_datasets()
 
     def training_step(self, batch, batch_idx):
         # loss = self.step(batch)
@@ -46,7 +49,7 @@ class ConvModule(LightningModule):
         loss = self.criterion(output, labels)
         acc = self.accuracy(output, labels)
         self.log("train_accuracy",  acc, on_step=False, on_epoch=True, batch_size=self.args.batch_size)
-        self.log("lr", self.args.learning_rate, on_epoch=True, on_step=False, logger=True, batch_size=self.args.batch_size)
+        self.log("lr", self.scheduler.get_last_lr()[0], on_epoch=True, on_step=False, logger=True, batch_size=self.args.batch_size)
         self.log("train_loss",  loss.detach(), on_epoch=True, batch_size=self.args.batch_size)
 
         return loss
@@ -62,25 +65,27 @@ class ConvModule(LightningModule):
 
     def configure_optimizers(self):
         self.optimizer = optim.SGD(self.model.parameters(), 
-                                    lr=self.args.learning_rate, 
+                                    lr=self.lr, 
                                     momentum=0.9, # Annealing applied to learning rate after each epoch
                                     nesterov=True,
                                     weight_decay = 1e-5)  # Initial Weight Decay)
-        # self.scheduler = optim.lr_scheduler.ExponentialLR(self.optimizer, gamma=0.99)
+        self.scheduler = optim.lr_scheduler.StepLR(self.optimizer, step_size=5, gamma=0.25)
         return {
             'optimizer': self.optimizer,
-            # 'lr_scheduler': self.scheduler, # Changed scheduler to lr_scheduler
+            'lr_scheduler': self.scheduler, # Changed scheduler to lr_scheduler
                     }
 
     def train_dataloader(self):
-        return DataLoader(dataset=self.train_ds,
+        train_datset = torch.utils.data.Subset(self.dataset, self.train_indices)
+        return DataLoader(dataset=train_datset,
                             num_workers=self.args.num_workers,
                             batch_size=self.args.batch_size,
                             pin_memory=True,
                             collate_fn=collate_fn_padd)
 
     def val_dataloader(self):
-        return DataLoader(dataset=self.valid_ds,
+        test_datset = torch.utils.data.Subset(self.dataset, self.test_indices)
+        return DataLoader(dataset=test_datset,
                             num_workers=self.args.num_workers,
                             batch_size=self.args.batch_size,
                             pin_memory=True,
@@ -91,7 +96,7 @@ def train(args):
     random.seed(28)
     torch.manual_seed(28)
 
-    model = ConvNN()
+    model = MnistExampleModel()
     if args.load_from_checkpoint:
         conv_module = ConvModule.load_from_checkpoint(args.ckp_path, model=model, args=args)
     else:
@@ -104,7 +109,7 @@ def train(args):
         workspace=comet_config["workspace"],
         experiment_name="fullyConvModel_{}_{}".format(args.epochs, args.learning_rate))
 
-    ckpt_callback = ModelCheckpoint(save_top_k=-1)
+    ckpt_callback = ModelCheckpoint(dirpath=args.save_model_path, save_top_k=-1, filename='{epoch}-{val_loss:.2f}')
     trainer = Trainer(
 		max_epochs=args.epochs, 
 		accelerator='gpu',
@@ -112,7 +117,8 @@ def train(args):
 		logger=logger,
 		# val_check_interval=args.valid_every,
 		callbacks=ckpt_callback,
-		resume_from_checkpoint=args.ckp_path
+		resume_from_checkpoint=args.ckp_path,
+        auto_lr_find=True
 		)
 
     trainer.fit(conv_module)
@@ -133,7 +139,7 @@ if __name__ == "__main__":
                         help='valid after every N iteration')
 
     # dir and path for models and logs
-    parser.add_argument('--save_model_path', default="src/models/", type=str,
+    parser.add_argument('--save_model_path', default="models/", type=str,
                         help='path to save model')
     parser.add_argument('--ckp_path', default=None, required=False, type=str,
                         help='path to load a pretrain model to continue training')
@@ -141,9 +147,9 @@ if __name__ == "__main__":
                         help='check path to resume from')
 
     # general
-    parser.add_argument('--epochs', default=10, type=int, help='number of total epochs to run')
+    parser.add_argument('--epochs', default=100, type=int, help='number of total epochs to run')
     parser.add_argument('--batch_size', default=2, type=int, help='size of batch')
-    parser.add_argument('--learning_rate', default=0.05, type=float, help='learning rate')
+    parser.add_argument('--learning_rate', default=9e-4, type=float, help='learning rate')
     parser.add_argument('--pct_start', default=0.3, type=float, help='percentage of growth phase in one cycle')
     parser.add_argument('--div_factor', default=100, type=int, help='div factor for one cycle')
     parser.add_argument("--hparams_override", default={},
