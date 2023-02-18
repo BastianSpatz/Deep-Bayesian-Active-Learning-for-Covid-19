@@ -6,6 +6,8 @@ from typing import Any, Callable, List, Optional, Sequence
 import numpy as np
 import torch
 import torch.nn as nn
+from torchvision import transforms
+
 from baal.utils.transforms import BaaLTransform
 from torch.utils.data import Dataset
 
@@ -16,10 +18,14 @@ def seed_all(seed):
     torch.manual_seed(seed)
 
 def default_image_load_fn(x):
-    volume = np.load(x, allow_pickle=True)
+    # volume size: (n_images, 512, 512, 3)
+    volume = torch.tensor(np.load(x, allow_pickle=True))
+    # if len(volume.shape) < 4:
+    #     volume = volume.unsqueeze(-1)
     # volume size: (n_images, 3, 512, 512)
-    volume = torch.tensor(volume).permute(0, 3, 1, 2).float()    
-    return volume
+    # print(volume.shape)
+    # volume = volume.permute(1, 0, 2).float()    
+    return volume.float()
 
 
 class CustomFileDataset(Dataset):
@@ -77,7 +83,6 @@ class CustomFileDataset(Dataset):
 
     def __getitem__(self, idx):
         x, y = self.files[idx], self.lbls[idx]
-
         np.random.seed(self.seed)
         batch_seed = np.random.randint(0, 100, 1).item()
         seed_all(batch_seed + idx)
@@ -89,6 +94,9 @@ class CustomFileDataset(Dataset):
         kwargs = self.get_kwargs(self.transform, image_shape=img.size, idx=idx)
 
         if self.transform:
+            if len(img.shape)==3:
+                # unsqueeze channel of gray scale image
+                img = img.unsqueeze(0)
             img_t = self.transform(img, **kwargs)
         else:
             img_t = img
@@ -99,7 +107,7 @@ class CustomFileDataset(Dataset):
                 self.target_transform, image_shape=img.size, idx=idx)
             y = self.target_transform(y, **kwargs)
         y = torch.tensor(y)
-        return img_t.transpose(0, 1), y.type(torch.LongTensor)
+        return img_t.squeeze(0), y.type(torch.LongTensor)
 
     @staticmethod
     def get_kwargs(transform, **kwargs):
@@ -132,7 +140,9 @@ class CustomDataset(torch.utils.data.Dataset):
         try:
             # volume size: (n_images, 512, 512, 3)
             volume_path = self.data_paths[index]
-            volume = np.load(volume_path, allow_pickle=True)
+            volume = torch.tensor(np.load(volume_path, allow_pickle=True))
+            if len(volume.shape) < 4:
+                volume = volume.unsqueeze(-1)
             # class size: (1)
             # class_path = self.target_paths[index]
             # class_id = np.load(class_path)
@@ -140,7 +150,7 @@ class CustomDataset(torch.utils.data.Dataset):
             # if len(volume.shape) != 4:
             #     raise Exception("wrong volume shape: {}".format(volume.shape))
             # volume size: (n_images, 3, 512, 512)
-            volume = torch.tensor(volume).permute(0, 3, 1, 2).float()
+            volume = volume.permute(0, 3, 1, 2).float()
             # volume = transforms.Resize((512//4, 512//4))(volume)
             # if self.is_transform is True:
             #     # if random.random() <= 0.5:

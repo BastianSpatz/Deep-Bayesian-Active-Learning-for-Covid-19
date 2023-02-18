@@ -166,6 +166,12 @@ def convert(args):
         json.dump(json_data_val, jsonfile, sort_keys=True, indent=4)
     print("Done!")
 
+
+def create_coco_entry():
+    pass
+def npy_to_coco_file(npy_file_location, save_coco_file_location):
+    pass
+
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="""

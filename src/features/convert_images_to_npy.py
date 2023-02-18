@@ -1,9 +1,54 @@
 import argparse
 import os
+import random
 
 import cv2
 import numpy as np
 import pandas as pd
+from scipy.ndimage import zoom
+
+# Spline interpolated zoom (SIZ)
+def change_depth_siz(volume, desired_depth):
+    current_depth = volume.shape[0]
+    depth = current_depth / desired_depth
+    depth_factor = 1 / depth
+    volume_new = zoom(volume, (depth_factor, 1, 1), mode='nearest')
+    return volume_new
+
+
+def check_images(volume_path, image_paths):
+    # check if volume is 'appropriate'
+    if len(image_paths) <= 3:
+        return False
+    
+    random_image_path_idx = random.randint(0, len(image_paths))
+    image = cv2.imread(os.path.join(volume_path, image_paths[random_image_path_idx]),  cv2.IMREAD_GRAYSCALE)
+    if image.shape != (512, 512):
+        Exception("image {} has wrong dimension: {}".format(image_paths[random_image_path_idx], image.shape))
+        return False
+    
+    if image_paths[random_image_path_idx][-3:] != "png":
+        Exception("image {} has wrong datatype: {}".format(image_paths[random_image_path_idx], image_paths[random_image_path_idx][-3:]))
+        return False
+    
+    try:
+        image_path = volume_path + "/" + image_paths[len(image_paths)//2]
+        image = cv2.imread(image_path)
+        unique, counts = np.unique(image, return_counts=True)
+        mapColorCounts = dict(zip(unique, counts))  
+        sum = 0
+        for key in mapColorCounts.keys():
+            if key != 0:
+                sum += mapColorCounts[key]
+        if mapColorCounts[0] >= sum:
+            print("image {} has more black pixel than anything else".format(image_path))
+            return False
+    except Exception as e:
+        print("could not check {}".format(image_path))
+        print(e)
+        return True
+    
+    return True
 
 
 def convert_images_to_npy(args):
@@ -16,7 +61,11 @@ def convert_images_to_npy(args):
         if not os.path.exists(path_to_volume_folder):
             print("Could not find volume folder {}".format(path_to_volume_folder))
             continue
-
+        if os.path.exists(args.save_path + "volumes/" + "vol_" + row["label"] + "_" + str(row["patient_id"]) + "_" + str(row["scan_id"]) + ".npy"):
+            print("Volume already exists {}".format(path_to_volume_folder))
+            continue
+        
+        # get volume and associated class
         images = [x for x in os.listdir(path_to_volume_folder)]
         print("Patient: {} scan id: {}".format(
             row["patient_id"], row["scan_id"]), end="\r")
@@ -27,24 +76,55 @@ def convert_images_to_npy(args):
         elif row["label"] == "Normal":
             y = 2
 
-        volume = []
-        if len(images) <= 3:
+        
+        # check if volume is 'appropriate'
+        if len(images) < 10:
             continue
+
         image_path = path_to_volume_folder + "/" + images[0]
         image = cv2.imread(image_path)
         if image.shape != (512, 512, 3):
-            print("image has wrong dimension: {}".format(image.shape))
+            print("image {} has wrong dimension: {}".format(image_path, image.shape))
             continue
-        for image in images:
-            image_path = path_to_volume_folder + "/" + image
+        if image_path[-3:] != "png":
+            print("image {} has wrong datatype: {}".format(image_path, image_path[-3:]))
+            continue
+        try:
+            image_path = path_to_volume_folder + "/" + images[len(images)//2]
             image = cv2.imread(image_path)
-            volume.append(np.array(image))
-        if len(images) < 64:
-            num_extend = 64 - len(images)
-            extend_list = [volume[-1] for _ in range(num_extend)]
-            volume.extend(extend_list)
-            print("extended volume {} by {} slices".format(
-                image_path, num_extend))
+            unique, counts = np.unique(image, return_counts=True)
+            mapColorCounts = dict(zip(unique, counts))  
+            sum = 0
+            for key in mapColorCounts.keys():
+                if key != 0:
+                    sum += mapColorCounts[key]
+            if mapColorCounts[0] >= sum:
+                print("image {} has more black pixel than anything else".format(image_path))
+                continue
+        except Exception as e:
+            print("could not check {}".format(image_path))
+            print(e)
+
+        # unique, counts = np.unique(image, return_counts=True)
+        # mapColorCounts = dict(zip(unique, counts))
+        # if mapColorCounts[0] > 512*512//2:
+        #     continue
+        volume = []
+        try:
+            for image in images:
+                image_path = path_to_volume_folder + "/" + image
+                image = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
+                if any((np.array(image) == x).all() for x in volume):
+                    print("image already in volume {}".format(path_to_volume_folder))
+                    continue
+                volume.append(np.array(image))
+        except Exception as e:
+            print("could not check for duplicates")
+            print("skipping this volume {}".format(image_path))
+            print(e)
+            continue
+
+        volume = change_depth_siz(np.array(volume), desired_depth=64)
         try:
             if not os.path.exists(args.save_path + "volumes"):
                 # Create a new directory because it does not exist
@@ -53,11 +133,12 @@ def convert_images_to_npy(args):
                 # Create a new directory because it does not exist
                 os.makedirs(args.save_path + "labels")
             np.save(args.save_path + "volumes/" + "vol_" + row["label"] + "_" + str(
-                row["patient_id"]) + "_" + str(row["scan_id"]), np.array(volume))
+                row["patient_id"]) + "_" + str(row["scan_id"]), volume)
             np.save(args.save_path + "labels/" + "label_" + row["label"] + "_" + str(
                 row["patient_id"]) + "_" + str(row["scan_id"]), np.array(y))
         except Exception as e:
             print(e)
+            print("could not save image {} of size: {}".format(path_to_volume_folder, len(volume)))
 
 
 if __name__ == "__main__":

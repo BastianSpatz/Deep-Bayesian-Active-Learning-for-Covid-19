@@ -8,6 +8,8 @@ from PIL import Image
 
 from pycocotools import mask
 
+
+
 def close_contour(contour):
     if not np.array_equal(contour[0], contour[-1]):
         contour = np.vstack((contour, contour[0]))
