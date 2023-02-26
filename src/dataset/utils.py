@@ -1,106 +1,164 @@
+from typing import Generic, TypeVar
 import random
-import torch
-import numpy as np
-import torchvision.transforms.functional as TF
 
-class MyRotationTransform:
-    """Rotate by one of the given angles."""
-
-    def __init__(self, angle):
-        self.angle = angle
-
-    def __call__(self, x):
-        return TF.rotate(x, self.angle)
+T = TypeVar("T")
 
 
-def get_active_learning_datasets(dataset, initial_pool=3, split=[0.7, 0.1, 0.2]):
-    if sum(split) != 1:
-        return "split does not add up to 1: {}".format(split)
-    
-    (cp_train_samples, cp_val_samples, cp_test_samples), (ncp_train_samples, ncp_val_samples, ncp_test_samples), (normal_train_samples, normal_val_samples, normal_test_samples) = balanced_train_test_split(dataset, split)
-    num_class_samples = int(initial_pool/3)
+def uncertainty_debug_split(
+    dataset, samples_per_cls=[20, 20, 20], initial_pool=3, split=[0.7, 0.2, 0.1]
+):
+    (
+        (cp_train_samples, cp_val_samples, cp_test_samples),
+        (ncp_train_samples, ncp_val_samples, ncp_test_samples),
+        (normal_train_samples, normal_val_samples, normal_test_samples),
+    ) = balanced_train_test_val_split(dataset, split)
+    train_samples = []
+    # test_samples = []
+    # initial_pool_paths = []
+    test_samples = list(cp_test_samples.union(ncp_test_samples, normal_test_samples))
+    num_class_samples = int(initial_pool / 3)
 
     cp_labelled_samples = random.sample(cp_train_samples, num_class_samples)
     ncp_labelled_samples = random.sample(ncp_train_samples, num_class_samples)
     normal_labelled_samples = random.sample(normal_train_samples, num_class_samples)
-    
 
-    train_paths = cp_train_samples.union(ncp_train_samples, normal_train_samples)
-    val_paths = cp_val_samples.union(ncp_val_samples, normal_val_samples)
-    test_paths = cp_test_samples.union(ncp_test_samples, normal_test_samples)
+    train_samples = (
+        list(random.sample(cp_train_samples, samples_per_cls[0]))
+        + list(random.sample(ncp_train_samples, samples_per_cls[1]))
+        + list(random.sample(normal_train_samples, samples_per_cls[2]))
+    )
 
-    train_indices = [dataset.data_paths.index(path) for path in list(train_paths)]
-    val_indices = [dataset.data_paths.index(path) for path in list(val_paths)]
-    test_indices = [dataset.data_paths.index(path) for path in list(test_paths)]
+    # for cls in classes:
+    #     if cls == "CP":
+    #         train_samples += list(cp_train_samples)
+    #         test_samples += list(cp_test_samples)
+    #         initial_pool_paths += list(cp_labelled_samples)
+    #     elif cls == "NCP":
+    #         train_samples += list(ncp_train_samples)
+    #         test_samples += list(ncp_test_samples)
+    #         initial_pool_paths += list(ncp_labelled_samples)
+    #     elif cls == "Normal":
+    #         train_samples += list(normal_train_samples)
+    #         test_samples += list(normal_test_samples)
+    #         initial_pool_paths += list(normal_labelled_samples)
+
+    full_set = cp_train_samples.union(ncp_train_samples, normal_train_samples)
+
+    # initial_pool = [train_samples.index(idx) for idx in list(initial_pool_paths)]
+
+    remaining_cls = list(full_set - set(train_samples))
+
+    return train_samples, test_samples, remaining_cls
 
 
+def get_class_files(dataset: Generic[T], indices: list[int] = None) -> tuple:
+    """
+    Get indices per classes.
+    Args:
+        dataset (Data): The dataset.
+        indices (List[int]): indices to split.
 
-    initial_pool_paths = cp_labelled_samples + ncp_labelled_samples + normal_labelled_samples
-    initial_pool = [list(train_paths).index(path) for path in list(initial_pool_paths)]
-    # initial_pool = [dataset.data_paths.index(path) for path in list(initial_pool_paths)]
-
-    print("size train files: {}".format(len(train_indices)))
-    print("size test files: {}".format(len(test_indices)))
-    print("size val files: {}".format(len(val_indices)))
-    print("size initial pool files: {}".format(len(initial_pool)))
-    return train_indices, val_indices, test_indices, initial_pool
-    
-def balanced_train_test_split(dataset, split):
-    CP_files, NCP_files, Normal_files = get_class_files(dataset)
-    num_normal_files_train = int(len(Normal_files)*split[0])
-    num_normal_files_val= int(len(Normal_files)*split[1])
-    num_normal_files_test= int(len(Normal_files)*split[2])
-
-    # random.shuffle(CP_files)
-    # random.shuffle(NCP_files)
-    # random.shuffle(Normal_files)
-
-    cp_files = set(CP_files)
-    ncp_files = set(NCP_files)
-    normal_files = set(Normal_files)
-    
-    cp_train_samples = set(random.sample(cp_files, num_normal_files_train))
-    cp_val_samples = set(random.sample(cp_files - cp_train_samples, num_normal_files_val))
-    cp_test_samples = set(random.sample(cp_files - cp_train_samples - cp_val_samples, num_normal_files_test))
-
-    ncp_train_samples = set(random.sample(ncp_files, num_normal_files_train))
-    ncp_val_samples = set(random.sample(ncp_files - ncp_train_samples, num_normal_files_val))
-    ncp_test_samples = set(random.sample(ncp_files - ncp_train_samples - ncp_val_samples, num_normal_files_test))
-
-    normal_train_samples = set(random.sample(normal_files, num_normal_files_train))
-    normal_val_samples = set(random.sample(normal_files - normal_train_samples, num_normal_files_val))
-    normal_test_samples = set(random.sample(normal_files - normal_train_samples - normal_val_samples, num_normal_files_test))
-    
-    return (cp_train_samples, cp_val_samples, cp_test_samples), (ncp_train_samples, ncp_val_samples, ncp_test_samples), (normal_train_samples, normal_val_samples, normal_test_samples)
-
-def get_class_files(dataset, indices=None):
-    CP_files = []
-    NCP_files = []
-    Normal_files = []
+    Returns:
+        tuple of cls indices
+    """
+    cp_files = []
+    ncp_files = []
+    normal_files = []
     if indices == None:
-        paths = dataset.data_paths
+        paths = dataset.files
     else:
-        paths = [dataset.data_paths[idx] for idx in indices]
-    for path in paths:
+        paths = [dataset.files[idx] for idx in indices]
+    for idx, path in enumerate(paths):
         if "_CP_" in path:
-            CP_files.append(path)
+            cp_files.append(idx)
         elif "_NCP_" in path:
-            NCP_files.append(path)
+            ncp_files.append(idx)
         elif "_Normal_" in path:
-            Normal_files.append(path)
+            normal_files.append(idx)
         else:
             print("Weird path found: {}".format(path))
-    print("CP sample len {}".format(len(CP_files)))
-    print("NCP sample len {}".format(len(NCP_files)))
-    print("Normal sample len {}".format(len(Normal_files)))
-    return CP_files, NCP_files, Normal_files
+
+    return (cp_files, ncp_files, normal_files)
 
 
-def train_test_validation_split(dataset, split=[.8, .1, .1]):
-    dataset_len = len(dataset)
-    train_size = int(0.8*dataset_len)
-    test_size = int(0.1*dataset_len)
-    valid_size = dataset_len - train_size - test_size
-    train, test, validation = torch.utils.data.random_split(dataset, [train_size, test_size, valid_size])
+def balanced_train_test_val_split(dataset: Generic[T], split: list[float]):
 
-    return train, test, validation
+    (cp_files, ncp_files, normal_files) = get_class_files(dataset)
+
+    shortest_list = min([cp_indices, ncp_indices, normal_indices], key=len)
+
+    len_train = int(len(shortest_list) * split[0])
+    len_val = int(len(shortest_list) * split[1])
+    len_test = int(len(shortest_list) * split[2])
+
+    cp_indices = set(cp_indices)
+    ncp_indices = set(ncp_indices)
+    normal_indices = set(normal_indices)
+
+    cp_train_indices = set(random.sample(cp_indices, len_train))
+    cp_val_indices = set(random.sample(cp_indices - cp_train_indices, len_val))
+    cp_test_indices = set(
+        random.sample(cp_indices - cp_train_indices - cp_val_indices, len_test)
+    )
+
+    ncp_train_indices = set(random.sample(ncp_indices, len_train))
+    ncp_val_indices = set(random.sample(ncp_indices - ncp_train_indices, len_val))
+    ncp_test_indices = set(
+        random.sample(ncp_indices - ncp_train_indices - ncp_val_indices, len_test)
+    )
+
+    normal_train_indices = set(random.sample(normal_indices, len_train))
+    normal_val_indices = set(
+        random.sample(normal_indices - normal_train_indices, len_val)
+    )
+    normal_test_indices = set(
+        random.sample(
+            normal_indices - normal_train_indices - normal_val_indices,
+            len_test,
+        )
+    )
+
+    return (
+        (cp_train_indices, cp_val_indices, cp_test_indices),
+        (ncp_train_indices, ncp_val_indices, ncp_test_indices),
+        (normal_train_indices, normal_val_indices, normal_test_indices),
+    )
+
+
+def balanced_active_learning_split(
+    dataset: Generic[T], initial_pool: int = 3, split: list[float] = [0.7, 0.1, 0.2]
+):
+    """
+    Get balanced train, test, val set and an initial pool w.r.t. train.
+    Args:
+        dataset (Data): The dataset.
+        initial_pool (int): Number of instances to label.
+        split: (List(float)): train, val, test split
+    """
+    if sum(split) != 1:
+        return "split does not add up to 1: {}".format(split)
+
+    (
+        (cp_train_indices, cp_val_indices, cp_test_indices),
+        (ncp_train_indices, ncp_val_indices, ncp_test_indices),
+        (normal_train_indices, normal_val_indices, normal_test_indices),
+    ) = balanced_train_test_val_split(dataset, split)
+
+    label_per_cls = int(initial_pool / 3)
+
+    cp_labelled_indices = random.sample(cp_train_indices, label_per_cls)
+    ncp_labelled_indices = random.sample(ncp_train_indices, label_per_cls)
+    normal_labelled_indices = random.sample(normal_train_indices, label_per_cls)
+
+    train_indices = list(
+        cp_train_indices.union(ncp_train_indices, normal_train_indices)
+    )
+    val_indices = list(cp_val_indices.union(ncp_val_indices, normal_val_indices))
+    test_indices = list(cp_test_indices.union(ncp_test_indices, normal_test_indices))
+
+    initial_pool_indices = (
+        cp_labelled_indices + ncp_labelled_indices + normal_labelled_indices
+    )
+    initial_pool = [train_indices.index(idx) for idx in list(initial_pool_indices)]
+
+    return train_indices, val_indices, test_indices, initial_pool
