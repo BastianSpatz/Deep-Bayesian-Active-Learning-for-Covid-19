@@ -23,7 +23,7 @@ from torchmetrics import Accuracy
 from src.configs.comet_configs import comet_config
 from src.dataset.dataset import CustomDataset, collate_fn_padd, CustomFileDataset
 from src.dataset.utils import get_active_learning_datasets, MyRotationTransform
-from src.models.conv_net import CNN, CustomVGG16, MedicalNet, MnistExampleModel
+from src.models.models import CNN, CustomVGG16, MedicalNet, MnistExampleModel
 
 
 @dataclass

@@ -83,7 +83,7 @@ def get_class_files(dataset: Generic[T], indices: list[int] = None) -> tuple:
 
 def balanced_train_test_val_split(dataset: Generic[T], split: list[float]):
 
-    (cp_files, ncp_files, normal_files) = get_class_files(dataset)
+    (cp_indices, ncp_indices, normal_indices) = get_class_files(dataset)
 
     shortest_list = min([cp_indices, ncp_indices, normal_indices], key=len)
 

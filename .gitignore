@@ -153,6 +153,7 @@ dmypy.json
 cython_debug/
 
 # folders
+images/
 data/
 /models/
 configs/

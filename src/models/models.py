@@ -1,14 +1,48 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torchvision.models import vgg16
+from torchvision.models import vgg16, mobilenet_v2, MobileNet_V2_Weights
+from torch.hub import load_state_dict_from_url
 import baal.bayesian.dropout
+
+
+class MobileNetV2(nn.Module):
+    def __init__(self) -> None:
+        super(MobileNetV2, self).__init__()
+        self.model = mobilenet_v2(pretrained=False)
+        # for param in self.model.parameters():
+        #     param.requires_grad = False
+        self.model.features[0][0] = nn.Conv2d(
+            64, 32, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False
+        )
+        self.model.classifier = nn.Sequential(
+            baal.bayesian.dropout.Dropout(p=0.25),
+            nn.Linear(in_features=1280, out_features=512),
+            nn.ReLU(),
+            # baal.bayesian.dropout.Dropout(p=0.2),
+            # nn.Linear(in_features=1000, out_features=512),
+            # nn.ReLU(),
+            baal.bayesian.dropout.Dropout(p=0.25),
+            nn.Linear(in_features=512, out_features=256),
+            nn.ReLU(),
+            baal.bayesian.dropout.Dropout(p=0.25),
+            nn.Linear(in_features=256, out_features=3),
+        )
+        print(self.model)
+
+    def forward(self, x):
+        return self.model(x)
 
 
 class CustomVGG16(nn.Module):
     def __init__(self, active_learning_mode=False) -> None:
         super(CustomVGG16, self).__init__()
         self.model = vgg16(pretrained=True)
+        # weights = load_state_dict_from_url(
+        #     "https://download.pytorch.org/models/vgg16-397923af.pth"
+        # )
+        # weights = {k: v for k, v in weights.items() if "classifier.6" not in k}
+        # self.model.load_state_dict(weights, strict=False)
 
         self.model.features = nn.Sequential(*list(self.model.children())[0][2:])
         self.model.avgpool = nn.Sequential(nn.Identity())
@@ -33,45 +67,13 @@ class CustomVGG16(nn.Module):
             self.dropout,
             nn.Linear(in_features=256, out_features=3),
         )
-        self.model = nn.Sequential(self.model.features, self.classifier)
+        self.model = nn.Sequential(
+            self.model.features, self.model.avgpool, self.classifier
+        )
+        print(self.model)
 
     def forward(self, x):
         return self.model(x)
-
-
-class MedicalNet(nn.Module):
-    def __init__(self, path_to_weights, device):
-        super(MedicalNet, self).__init__()
-        self.model = resnet10(
-            sample_input_D=1, sample_input_H=112, sample_input_W=112, num_seg_classes=3
-        )
-        self.model.conv_seg = nn.Sequential(
-            nn.AdaptiveMaxPool3d(output_size=(1, 1, 1)),
-            nn.Flatten(start_dim=1),
-            nn.Dropout(0.25),
-        )
-        net_dict = self.model.state_dict()
-        pretrained_weights = torch.load(
-            path_to_weights, map_location=torch.device(device)
-        )
-        pretrain_dict = {
-            k.replace("module.", ""): v
-            for k, v in pretrained_weights["state_dict"].items()
-            if k.replace("module.", "") in net_dict.keys()
-        }
-        net_dict.update(pretrain_dict)
-        self.model.load_state_dict(net_dict)
-        for param_name, param in self.model.named_parameters():
-            if param_name.startswith("conv_seg") or param_name.startswith("conv"):
-                param.requires_grad = True
-            else:
-                param.requires_grad = False
-
-        self.fc = nn.Linear(512, 3)
-
-    def forward(self, x):
-        features = self.model(x)
-        return self.fc(features)
 
 
 class CNN(nn.Module):
@@ -224,7 +226,6 @@ class ConvNN(nn.Module):
         self.fc2 = nn.Linear(128, 3)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-
         x = self.conv1(x)
         x = self.batchnorm1(x)
         x = F.relu(x)

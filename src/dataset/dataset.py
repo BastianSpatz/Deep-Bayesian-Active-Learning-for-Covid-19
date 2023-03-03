@@ -31,6 +31,27 @@ def default_image_load_fn(x):
     return volume.float()
 
 
+class Files:
+    """
+    Dataset object that loads the file paths.
+    Args:
+        data_path (str): The file path.
+        target_path (str): The target path.
+    """
+
+    def __init__(
+        self,
+        data_path: str,
+        target_path: str,
+    ):
+        self.files = []
+        self.lbls = []
+        for data_file_name in os.listdir(data_path):
+            self.files.append(data_path + data_file_name)
+
+            self.lbls.append(np.load(target_path + "label" + data_file_name[3:]))
+
+
 class Data(Dataset):
     """
     Dataset object that loads the file paths.
@@ -49,7 +70,6 @@ class Data(Dataset):
         image_load_fn: Optional[Callable] = None,
         seed=None,
     ):
-
         self.image_load_fn = image_load_fn or default_image_load_fn
         self.seed = seed
         self.files = []
