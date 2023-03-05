@@ -162,6 +162,7 @@ lightning_logs
 labels.txt
 checkpoint.pth
 /active_learning_logs/
+checkpoints/
 
 # PyCharm
 #  JetBrains specific template is maintained in a separate JetBrains.gitignore that can

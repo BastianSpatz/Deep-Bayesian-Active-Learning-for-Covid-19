@@ -1,9 +1,8 @@
+import baal.bayesian.dropout
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torchvision.models import vgg16, mobilenet_v2, MobileNet_V2_Weights
-from torch.hub import load_state_dict_from_url
-import baal.bayesian.dropout
+from torchvision.models import VGG16_Weights, mobilenet_v2, vgg16
 
 
 class MobileNetV2(nn.Module):
@@ -37,12 +36,7 @@ class MobileNetV2(nn.Module):
 class CustomVGG16(nn.Module):
     def __init__(self, active_learning_mode=False) -> None:
         super(CustomVGG16, self).__init__()
-        self.model = vgg16(pretrained=True)
-        # weights = load_state_dict_from_url(
-        #     "https://download.pytorch.org/models/vgg16-397923af.pth"
-        # )
-        # weights = {k: v for k, v in weights.items() if "classifier.6" not in k}
-        # self.model.load_state_dict(weights, strict=False)
+        self.model = vgg16(weights=VGG16_Weights.DEFAULT)
 
         self.model.features = nn.Sequential(*list(self.model.children())[0][2:])
         self.model.avgpool = nn.Sequential(nn.Identity())

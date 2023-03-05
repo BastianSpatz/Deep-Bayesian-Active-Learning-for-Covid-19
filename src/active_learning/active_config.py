@@ -3,11 +3,13 @@ from dataclasses import dataclass
 
 @dataclass
 class ExperimentConfig:
-    epoch: int = 10
-    batch_size: int = 8
-    initial_pool: int = 33
-    query_size: int = 33
-    lr: float = 0.0005
+    epoch: int = 20
+    batch_size: int = 12
+    initial_pool: int = 90
+    query_size: int = 60
+    lr: float = 0.005
     heuristic: str = "bald"
     iterations: int = 50
-    learning_epoch: int = 30
+    learning_epoch: int = 1
+    patience: int = 20
+    min_epoch_for_es: int = 10

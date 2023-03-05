@@ -6,7 +6,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from pylab import rcParams
-from torchvision import transforms
 
 rcParams["figure.figsize"] = 10, 10
 
@@ -20,7 +19,6 @@ def plot_tensor_image(img_tensor):
 def plot_from_volume_tensor(
     vol, label, indices=None, n_samples=1, n_cols=3, title=None
 ):
-
     if indices is None:
         n_rows = int(math.ceil(n_samples / n_cols))
     else:

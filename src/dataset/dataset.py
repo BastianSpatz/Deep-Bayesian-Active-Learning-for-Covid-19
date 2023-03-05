@@ -1,14 +1,9 @@
 import os
 import random
-import warnings
-from typing import Any, Callable, List, Optional, Sequence
+from typing import Callable, Optional
 
 import numpy as np
 import torch
-import torch.nn as nn
-from torchvision import transforms
-
-from baal.utils.transforms import BaaLTransform
 from torch.utils.data import Dataset
 
 
@@ -29,27 +24,6 @@ def default_image_load_fn(x):
     """
     volume = torch.tensor(np.load(x, allow_pickle=True))
     return volume.float()
-
-
-class Files:
-    """
-    Dataset object that loads the file paths.
-    Args:
-        data_path (str): The file path.
-        target_path (str): The target path.
-    """
-
-    def __init__(
-        self,
-        data_path: str,
-        target_path: str,
-    ):
-        self.files = []
-        self.lbls = []
-        for data_file_name in os.listdir(data_path):
-            self.files.append(data_path + data_file_name)
-
-            self.lbls.append(np.load(target_path + "label" + data_file_name[3:]))
 
 
 class Data(Dataset):
@@ -108,9 +82,9 @@ class CustomSubset:
         transform (Optional[Callable]): torchvision.transform pipeline.
     """
 
-    def __init__(self, dataset, indices, transform=None) -> None:
+    def __init__(self, dataset, X, y, transform=None) -> None:
         self.dataset = dataset
-        self.indices = indices
+        self.indices = [self.dataset.files.index(x) for x in X]
         self.transform = transform
 
     def __getitem__(self, idx):
