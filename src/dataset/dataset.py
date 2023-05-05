@@ -1,14 +1,12 @@
 import os
 import random
-import warnings
-from typing import Any, Callable, List, Optional, Sequence
+from typing import Callable, Optional
+import cv2
+from torchvision.transforms import transforms
 
+from src.features.convert_images_to_npy import change_depth_siz
 import numpy as np
 import torch
-import torch.nn as nn
-from torchvision import transforms
-
-from baal.utils.transforms import BaaLTransform
 from torch.utils.data import Dataset
 
 
@@ -31,25 +29,46 @@ def default_image_load_fn(x):
     return volume.float()
 
 
-class Files:
-    """
-    Dataset object that loads the file paths.
-    Args:
-        data_path (str): The file path.
-        target_path (str): The target path.
-    """
+# Python program to read
+# image using PIL module
 
-    def __init__(
-        self,
-        data_path: str,
-        target_path: str,
-    ):
-        self.files = []
-        self.lbls = []
-        for data_file_name in os.listdir(data_path):
-            self.files.append(data_path + data_file_name)
+# importing PIL
+from PIL import Image
 
-            self.lbls.append(np.load(target_path + "label" + data_file_name[3:]))
+from src.features.convert_images_to_npy import process_cncb_data
+
+
+class VolumeDataset(Dataset):
+    def __init__(self, files, lbls, train_transform=None) -> None:
+        super(VolumeDataset, self).__init__()
+
+        self.files = files
+        self.lbls = lbls
+        self.train_transform = train_transform
+
+    def __getitem__(self, index) -> tuple[torch.tensor]:
+        try:
+            x = Image.open(self.files[index])
+            x = x.convert("L")
+        except Exception as e:
+            print(e)
+            return self.__getitem__(index - 1 if index != 0 else index + 1)
+
+        y = self.lbls[index]
+        # x: (D, 512, 512)
+        # x, y = data["x"], data["y"]
+        x = transforms.ToTensor()(x)
+        # if x.shape[0] == 1:
+        x = x.expand(size=(3, x.shape[1], x.shape[2]))
+        x = transforms.Resize((512, 512), antialias=True)(x)
+        if self.train_transform is not None:
+            x = self.train_transform(x)
+        # x = x.unsqueeze(1)
+        y = torch.tensor(y)
+        return x.float(), y.type(torch.LongTensor)
+
+    def __len__(self):
+        return len(self.files)
 
 
 class Data(Dataset):
@@ -77,7 +96,7 @@ class Data(Dataset):
         for data_file_name in os.listdir(data_path):
             self.files.append(data_path + data_file_name)
 
-            self.lbls.append(np.load(target_path + "label" + data_file_name[3:]))
+            self.lbls.append(np.load(target_path + data_file_name))
 
     def __len__(self):
         return len(self.files)
@@ -108,9 +127,10 @@ class CustomSubset:
         transform (Optional[Callable]): torchvision.transform pipeline.
     """
 
-    def __init__(self, dataset, indices, transform=None) -> None:
+    def __init__(self, dataset, X, y=None, transform=None) -> None:
         self.dataset = dataset
-        self.indices = indices
+        self.indices = [self.dataset.files.index(x) for x in X]
+
         self.transform = transform
 
     def __getitem__(self, idx):

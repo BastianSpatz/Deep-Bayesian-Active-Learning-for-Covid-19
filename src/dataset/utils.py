@@ -1,7 +1,49 @@
-from typing import Generic, TypeVar
 import random
+from typing import Generic, TypeVar
+
+import numpy as np
+from sklearn.model_selection import train_test_split
 
 T = TypeVar("T")
+
+
+def train_test_val_split(
+    X,
+    y,
+    train_size=None,
+    test_size=None,
+    random_state=None,
+    shuffle=True,
+):
+    X_train, X_test, y_train, y_test = train_test_split(
+        X,
+        y,
+        train_size=train_size,
+        random_state=random_state,
+        shuffle=shuffle,
+    )
+    X_test, X_val, y_test, y_val = train_test_split(
+        X_test,
+        y_test,
+        train_size=test_size / (1 - train_size),
+        random_state=random_state,
+        shuffle=shuffle,
+    )
+
+    return X_train, X_test, X_val, y_train, y_test, y_val
+
+
+def get_balanced_initial_pool(y, initial_pool):
+    num_samples = initial_pool // 3
+    indices = []
+    samples = [0, 0, 0]
+    for idx, cls in enumerate(y):
+        if samples[cls] < num_samples:
+            indices.append(idx)
+            samples[cls] += 1
+        if np.sum(samples) == num_samples * 3:
+            return indices
+    return indices
 
 
 def uncertainty_debug_split(
@@ -69,11 +111,11 @@ def get_class_files(dataset: Generic[T], indices: list[int] = None) -> tuple:
     else:
         paths = [dataset.files[idx] for idx in indices]
     for idx, path in enumerate(paths):
-        if "_CP_" in path:
+        if "/CP" in path:
             cp_files.append(idx)
-        elif "_NCP_" in path:
+        elif "/NCP" in path:
             ncp_files.append(idx)
-        elif "_Normal_" in path:
+        elif "/Normal" in path:
             normal_files.append(idx)
         else:
             print("Weird path found: {}".format(path))
@@ -82,7 +124,6 @@ def get_class_files(dataset: Generic[T], indices: list[int] = None) -> tuple:
 
 
 def balanced_train_test_val_split(dataset: Generic[T], split: list[float]):
-
     (cp_indices, ncp_indices, normal_indices) = get_class_files(dataset)
 
     shortest_list = min([cp_indices, ncp_indices, normal_indices], key=len)

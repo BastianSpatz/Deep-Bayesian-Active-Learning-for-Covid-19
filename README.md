@@ -43,6 +43,18 @@
     <li>
       <a href="#about-the-project">About The Project</a>
     </li>
+    <li>
+      <a href="#changes">Changes</a>
+    </li>
+    <li>
+      <a href="#todo">TODO</a>
+    </li>
+    <li>
+      <a href="#license">License</a>
+    </li>
+    <li>
+      <a href="#contact">Contact</a>
+    </li>
   </ol>
 </details>
 
@@ -51,6 +63,24 @@
 ## About The Project
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+<!-- CHANGES -->
+
+## Changes
+
+- 3D Volume of size (\*, 512, 512, 3) to fixed size (64, 512, 512) using [Uniformizing Techniques to Process CT scans with 3D CNNs for Tuberculosis Prediction](https://arxiv.org/abs/2007.13224).
+- Transfer Learning using 2D conv model [A Comprehensive Survey on Transfer Learning](https://arxiv.org/abs/1911.02685).
+- Using VGG-16 as backbone [Very Deep Convolutional Networks for Large-Scale Image Recognition](https://arxiv.org/abs/1409.1556).
+- Active Learning in production. How to optimize in production?
+
+<!-- TODO -->
+
+## TODO
+
+- Compare 3D model performance against 2D model performance.
+- Run active learning runs against random runs.
+- Train on the full dataset to compare.
+- Keep writing.
 
 <!-- LICENSE -->
 

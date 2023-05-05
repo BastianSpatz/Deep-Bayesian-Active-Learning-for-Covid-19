@@ -153,16 +153,19 @@ dmypy.json
 cython_debug/
 
 # folders
+wandb/
 images/
 data/
 /models/
-configs/
 /active-learning/
 lightning_logs
 labels.txt
 checkpoint.pth
 /active_learning_logs/
+checkpoints/
 
+# large files
+*.npz
 # PyCharm
 #  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
 #  be found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore

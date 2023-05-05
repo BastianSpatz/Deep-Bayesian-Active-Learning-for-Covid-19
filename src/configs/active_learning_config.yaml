@@ -1,0 +1,40 @@
+program: src.active_learning.train
+command:
+  - ${env}
+  - python
+  - -m
+  - ${program}
+  - ${args}
+method: bayes
+metric:
+  goal: maximize
+  name: val_accuracy
+parameters:
+  batch_size:
+    distribution: int_uniform
+    max: 8
+    min: 2
+  epochs:
+    value: 10
+  learning_rate:
+    distribution: uniform
+    max: 0.001
+    min: 0.0000001
+  query_size:
+    distribution: int_uniform
+    max: 150
+    min: 3
+  learning_epoch:
+    distribution: int_uniform
+    max: 10
+    min: 1
+  initial_pool:
+    distribution: int_uniform
+    max: 1000
+    min: 3
+  heuristic:
+    values: ["bald", "powerbald"]
+  patience:
+    value: 20
+  iterations:
+    value: 40
