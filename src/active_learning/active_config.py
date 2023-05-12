@@ -8,7 +8,7 @@ class ExperimentConfig:
     initial_pool: int = 60
     query_size: int = 20
     lr: float = 0.0001
-    heuristic: str = "bald"
+    heuristic: str = "random"
     iterations: int = 1 if heuristic == "random" else 40
     learning_epoch: int = 5
     patience: int = 15

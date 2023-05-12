@@ -5,10 +5,7 @@ command:
   - -m
   - ${program}
   - ${args}
-method: bayes
-metric:
-  goal: maximize
-  name: val_accuracy
+method: grid
 parameters:
   batch_size:
     distribution: int_uniform
