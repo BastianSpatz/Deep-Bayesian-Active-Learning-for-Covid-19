@@ -15,6 +15,17 @@ def train_test_val_split(
     random_state=None,
     shuffle=True,
 ):
+    (cp_files, ncp_files, normal_files) = get_class_files(X)
+
+    cp_indices = random.sample(cp_files, 1000)
+    ncp_indices = random.sample(ncp_files, 1000)
+    normal_indices = random.sample(normal_files, 1000)
+
+    indices = cp_indices + ncp_indices + normal_indices
+
+    X = [X[idx] for idx in indices]
+    y = [y[idx] for idx in indices]
+
     X_train, X_test, y_train, y_test = train_test_split(
         X,
         y,
@@ -93,7 +104,7 @@ def uncertainty_debug_split(
     return train_samples, test_samples, remaining_cls
 
 
-def get_class_files(dataset: Generic[T], indices: list[int] = None) -> tuple:
+def get_class_files(paths: Generic[T], indices: list[int] = None) -> tuple:
     """
     Get indices per classes.
     Args:
@@ -106,10 +117,6 @@ def get_class_files(dataset: Generic[T], indices: list[int] = None) -> tuple:
     cp_files = []
     ncp_files = []
     normal_files = []
-    if indices == None:
-        paths = dataset.files
-    else:
-        paths = [dataset.files[idx] for idx in indices]
     for idx, path in enumerate(paths):
         if "/CP" in path:
             cp_files.append(idx)

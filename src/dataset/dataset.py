@@ -52,7 +52,7 @@ class VolumeDataset(Dataset):
             x = x.convert("L")
         except Exception as e:
             print(e)
-            return self.__getitem__(index - 1 if index != 0 else index + 1)
+            return self.__getitem__(index - self.__len__())
 
         y = self.lbls[index]
         # x: (D, 512, 512)

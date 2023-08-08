@@ -271,7 +271,6 @@ def main(config=None):
         os.mkdir(os.path.join(experiment_path, "uncertainty"))
         train_transform = transforms.Compose(
             [
-                # transforms.Resize((224, 224), antialias=True),
                 transforms.RandomHorizontalFlip(),
                 transforms.RandomVerticalFlip(),
                 transforms.ColorJitter(
@@ -301,7 +300,7 @@ if __name__ == "__main__":
         "-n",
         "--epochs",
         dest="epochs",
-        default=10,
+        default=50,
         type=int,
         help="Number of epochs",
     )
@@ -313,7 +312,7 @@ if __name__ == "__main__":
         "--learning_rate",
         dest="learning_rate",
         type=float,
-        default=0.0002,
+        default=0.001,
         help="Learning rate",
     )
     parser.add_argument(
@@ -321,7 +320,7 @@ if __name__ == "__main__":
         "--learning_epoch",
         dest="learning_epoch",
         type=int,
-        default=1,
+        default=5,
         help="Learning epoch",
     )
     parser.add_argument(
@@ -329,7 +328,7 @@ if __name__ == "__main__":
         "--patience",
         dest="patience",
         type=int,
-        default=1,
+        default=20,
         help="Patience",
     )
     parser.add_argument(
@@ -337,7 +336,7 @@ if __name__ == "__main__":
         "--iterations",
         dest="iterations",
         type=int,
-        default=1,
+        default=20,
         help="iterations",
     )
     parser.add_argument(
@@ -345,7 +344,7 @@ if __name__ == "__main__":
         "--initial_pool",
         dest="initial_pool",
         type=int,
-        default=3,
+        default=9,
         help="initial_pool",
     )
     parser.add_argument(
@@ -360,7 +359,7 @@ if __name__ == "__main__":
         "--query_size",
         dest="query_size",
         type=int,
-        default=30,
+        default=9,
         help="query_size",
     )
     args = parser.parse_args()
